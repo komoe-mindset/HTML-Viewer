@@ -169,13 +169,20 @@ export default function App() {
         html2canvas: { 
           scale: 4,
           useCORS: true,
+          allowTaint: true,
+          windowWidth: 1200,
           logging: false,
           letterRendering: true,
           backgroundColor: '#ffffff',
           scrollY: 0,
           scrollX: 0
         },
-        jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+        jsPDF: { 
+          unit: 'mm' as const, 
+          format: 'a4' as const, 
+          orientation: 'portrait' as const,
+          autoPaging: 'text' as const
+        }
       };
 
       await html2pdf().from(iframeBody).set(opt).save();
@@ -285,7 +292,7 @@ export default function App() {
               whileTap={{ scale: 0.98 }}
               onClick={handleExportPDF}
               disabled={isExporting}
-              className="w-12 h-12 md:w-auto md:h-auto flex items-center justify-center md:gap-2 md:px-3 md:py-1.5 bg-white border border-brand-border rounded-lg md:rounded text-brand-text font-semibold transition-colors hover:bg-brand-border/30 disabled:opacity-50"
+              className="w-12 h-12 md:w-auto md:h-auto flex items-center justify-center md:gap-2 md:px-3 md:py-1.5 bg-transparent border border-brand-border rounded-lg md:rounded text-brand-text font-semibold transition-colors hover:bg-brand-border/30 disabled:opacity-50"
               aria-label="Export PDF"
             >
               {isExporting ? <Loader2 size={20} className="animate-spin" /> : <FileText size={20} />}
@@ -322,7 +329,7 @@ export default function App() {
               <div className="flex items-center gap-1 md:gap-2">
                 <button 
                   onClick={handlePaste}
-                  className="w-10 h-10 md:w-8 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
+                  className="w-10 h-10 md:w-7 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
                   title="Paste & Replace All"
                   aria-label="Paste and replace current code"
                 >
@@ -330,7 +337,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={handleCopy}
-                  className="w-10 h-10 md:w-8 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
+                  className="w-10 h-10 md:w-7 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
                   title="Copy to Clipboard"
                   aria-label="Copy code to clipboard"
                 >
@@ -338,7 +345,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={handleClear}
-                  className="w-10 h-10 md:w-8 md:h-7 flex items-center justify-center hover:bg-red-500/10 rounded transition-colors text-brand-text-dim hover:text-red-400"
+                  className="w-10 h-10 md:w-7 md:h-7 flex items-center justify-center hover:bg-red-500/10 rounded transition-colors text-brand-text-dim hover:text-red-400"
                   title="Clear Editor"
                   aria-label="Clear code editor"
                 >
