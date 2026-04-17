@@ -95,24 +95,26 @@ const DEFAULT_CODE = `<!DOCTYPE html>
 export default function App() {
   const [code, setCode] = useState(DEFAULT_CODE);
   const [copied, setCopied] = useState(false);
-  const [viewMode, setViewMode] = useState<'split' | 'editor' | 'preview'>('split');
+  const [viewMode, setViewMode] = useState<'split' | 'editor' | 'preview'>('editor');
+  const [isMobile, setIsMobile] = useState(false);
   const [previewScale, setPreviewScale] = useState<'mobile' | 'desktop'>('desktop');
   const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Sync viewMode on window resize to disable split on mobile
+  // Sync mobile state and viewMode on resize
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 768 && viewMode === 'split') {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      
+      if (mobile && viewMode === 'split') {
         setViewMode('editor');
       }
     };
     
-    // Initial check
     handleResize();
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [viewMode]);
@@ -316,10 +318,10 @@ export default function App() {
       {/* Main Workspace */}
       <main className="flex-1 flex flex-col md:flex-row min-h-0 relative pb-16 md:pb-0">
         {/* Editor Pane */}
-        {(viewMode === 'editor' || (viewMode === 'split' && window.innerWidth >= 768)) && (
+        {(viewMode === 'editor' || (viewMode === 'split' && !isMobile)) && (
           <motion.div 
             initial={false}
-            animate={{ width: viewMode === 'split' ? '50%' : '100%' }}
+            animate={{ width: (viewMode === 'split' && !isMobile) ? '50%' : '100%' }}
             className={`flex flex-col bg-brand-editor border-r border-brand-border relative h-full shrink-0`}
           >
             <div className="h-10 md:h-9 px-4 bg-brand-sidebar border-b border-brand-border flex items-center justify-between shrink-0">
@@ -368,10 +370,10 @@ export default function App() {
         )}
 
         {/* Preview Pane */}
-        {(viewMode === 'preview' || (viewMode === 'split' && window.innerWidth >= 768)) && (
+        {(viewMode === 'preview' || (viewMode === 'split' && !isMobile)) && (
           <motion.div 
             initial={false}
-            animate={{ width: viewMode === 'split' ? '50%' : '100%' }}
+            animate={{ width: (viewMode === 'split' && !isMobile) ? '50%' : '100%' }}
             className={`flex flex-col bg-brand-bg relative h-full shrink-0`}
           >
             <div className="h-10 md:h-9 px-4 bg-brand-sidebar border-b border-brand-border flex items-center justify-between shrink-0">
@@ -404,10 +406,10 @@ export default function App() {
                 layout
                 initial={false}
                 animate={{ 
-                  width: (previewScale === 'mobile' && window.innerWidth >= 768) ? '375px' : '100%',
-                  height: (previewScale === 'mobile' && window.innerWidth >= 768) ? '667px' : '100%',
+                  width: (previewScale === 'mobile' && !isMobile) ? '375px' : '100%',
+                  height: (previewScale === 'mobile' && !isMobile) ? '667px' : '100%',
                 }}
-                className={`bg-white shadow-2xl rounded-sm overflow-hidden transition-all duration-300 ${(previewScale === 'mobile' && window.innerWidth >= 768) ? 'max-h-[calc(100%-40px)] my-5' : 'w-full h-full'}`}
+                className={`bg-white shadow-2xl rounded-sm overflow-hidden transition-all duration-300 ${(previewScale === 'mobile' && !isMobile) ? 'max-h-[calc(100%-40px)] my-5' : 'w-full h-full'}`}
               >
                 <iframe
                   ref={iframeRef}
@@ -423,14 +425,14 @@ export default function App() {
       </main>
 
       {/* Bottom Navigation - Mobile Only */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-brand-sidebar border-t border-brand-border flex items-center z-30 px-2 shadow-2xl">
+      <nav className="flex md:hidden fixed bottom-0 left-0 w-full h-16 bg-brand-sidebar border-t border-brand-border flex items-center z-50 shadow-2xl">
         <button
           onClick={() => setViewMode('editor')}
           className={`flex-1 flex flex-col items-center justify-center gap-1 transition-all h-full ${viewMode === 'editor' ? 'text-brand-accent font-bold' : 'text-brand-text-dim'}`}
           aria-label="Switch to editor tab"
         >
           <Code2 size={24} />
-          <span className="text-[10px] uppercase tracking-wider">Editor</span>
+          <span className="text-[10px] uppercase tracking-wider">Code Editor</span>
         </button>
         <button
           onClick={() => setViewMode('preview')}
@@ -438,7 +440,7 @@ export default function App() {
           aria-label="Switch to preview tab"
         >
           <Eye size={24} />
-          <span className="text-[10px] uppercase tracking-wider">Preview</span>
+          <span className="text-[10px] uppercase tracking-wider">Live Preview</span>
         </button>
       </nav>
 
