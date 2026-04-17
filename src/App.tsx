@@ -13,7 +13,8 @@ import {
   Smartphone, 
   Monitor,
   FileText,
-  Loader2
+  Loader2,
+  ClipboardPaste
 } from 'lucide-react';
 
 const DEFAULT_CODE = `<!DOCTYPE html>
@@ -90,6 +91,7 @@ export default function App() {
   const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -161,6 +163,32 @@ export default function App() {
       alert('PDF Export failed. Ensuring the preview is fully loaded might help.');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handlePaste = async () => {
+    try {
+      // Try to use the Clipboard API
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        if (code.trim() && !window.confirm('This will replace your current code. Continue?')) {
+          return;
+        }
+        setCode(text);
+      }
+    } catch (err) {
+      // Fallback for iframe/permission restrictions
+      console.warn('Direct clipboard access blocked by browser security. Falling back to manual mode.');
+      
+      if (code.trim()) {
+        if (window.confirm('Direct paste is blocked by browser security in this preview. Would you like to clear the editor so you can paste manually using Ctrl+V (Cmd+V)?')) {
+          setCode('');
+          setTimeout(() => textareaRef.current?.focus(), 100);
+        }
+      } else {
+        textareaRef.current?.focus();
+        alert('Direct paste is blocked by browser security in this preview. Please use your keyboard shortcut: Ctrl+V (or Cmd+V) to paste.');
+      }
     }
   };
 
@@ -270,6 +298,13 @@ export default function App() {
               </span>
               <div className="flex items-center gap-2">
                 <button 
+                  onClick={handlePaste}
+                  className="p-1 hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
+                  title="Paste & Replace All"
+                >
+                  <ClipboardPaste size={14} />
+                </button>
+                <button 
                   onClick={handleCopy}
                   className="p-1 hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
                   title="Copy to Clipboard"
@@ -288,6 +323,7 @@ export default function App() {
             
             <div className="flex-1 relative overflow-hidden group">
               <textarea
+                ref={textareaRef}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 spellCheck={false}
