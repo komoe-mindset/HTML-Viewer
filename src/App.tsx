@@ -95,6 +95,7 @@ const DEFAULT_CODE = `<!DOCTYPE html>
 export default function App() {
   const [code, setCode] = useState(DEFAULT_CODE);
   const [copied, setCopied] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'split' | 'editor' | 'preview'>('editor');
   const [isMobile, setIsMobile] = useState(false);
   const [previewScale, setPreviewScale] = useState<'mobile' | 'desktop'>('desktop');
@@ -118,6 +119,22 @@ export default function App() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [viewMode]);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+S or Cmd+S
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleDownload();
+        setToast('Project Saved Locally!');
+        setTimeout(() => setToast(null), 3000);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [code]); // Re-bind if code (or handleDownload dependencies) changes
 
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -459,6 +476,21 @@ export default function App() {
           <span>HTML5 / CSS3</span>
         </div>
       </footer>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-brand-accent text-white rounded-full shadow-2xl font-bold text-xs uppercase tracking-widest flex items-center gap-2 border border-white/20"
+          >
+            <Check size={14} />
+            {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
