@@ -331,27 +331,27 @@ export default function App() {
               <div className="flex items-center gap-1 md:gap-2">
                 <button 
                   onClick={handlePaste}
-                  className="w-10 h-10 md:w-7 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
+                  className="w-12 h-12 md:w-7 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
                   title="Paste & Replace All"
                   aria-label="Paste and replace current code"
                 >
-                  <ClipboardPaste size={18} />
+                  <ClipboardPaste size={20} className="md:w-[18px] md:h-[18px]" />
                 </button>
                 <button 
                   onClick={handleCopy}
-                  className="w-10 h-10 md:w-7 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
+                  className="w-12 h-12 md:w-7 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
                   title="Copy to Clipboard"
                   aria-label="Copy code to clipboard"
                 >
-                  {copied ? <Check size={18} className="text-brand-accent" /> : <Copy size={18} />}
+                  {copied ? <Check size={20} className="text-brand-accent md:w-[18px] md:h-[18px]" /> : <Copy size={20} className="md:w-[18px] md:h-[18px]" />}
                 </button>
                 <button 
                   onClick={handleClear}
-                  className="w-10 h-10 md:w-7 md:h-7 flex items-center justify-center hover:bg-red-500/10 rounded transition-colors text-brand-text-dim hover:text-red-400"
+                  className="w-12 h-12 md:w-7 md:h-7 flex items-center justify-center hover:bg-red-500/10 rounded transition-colors text-brand-text-dim hover:text-red-400"
                   title="Clear Editor"
                   aria-label="Clear code editor"
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={20} className="md:w-[18px] md:h-[18px]" />
                 </button>
               </div>
             </div>
