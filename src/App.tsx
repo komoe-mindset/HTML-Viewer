@@ -14,7 +14,9 @@ import {
   Monitor,
   FileText,
   Loader2,
-  ClipboardPaste
+  ClipboardPaste,
+  ExternalLink,
+  Printer
 } from 'lucide-react';
 
 const DEFAULT_CODE = `<!DOCTYPE html>
@@ -175,42 +177,38 @@ export default function App() {
     if (!code.trim() || !iframeRef.current) return;
     
     setIsExporting(true);
+    setToast('Preparing High-Fidelity Print...');
+    
     try {
-      const iframeBody = iframeRef.current.contentWindow?.document.body;
-      if (!iframeBody) throw new Error("Iframe content not accessible");
+      const iframeWindow = iframeRef.current.contentWindow;
+      if (!iframeWindow) throw new Error("Iframe not accessible");
 
+      // Give a tiny bit of time for the toast to show
       await new Promise(resolve => setTimeout(resolve, 500));
-
-      const opt = {
-        margin: [10, 10, 10, 10] as [number, number, number, number],
-        filename: 'document.pdf',
-        image: { type: 'jpeg' as const, quality: 1.0 },
-        html2canvas: { 
-          scale: 4,
-          useCORS: true,
-          allowTaint: true,
-          windowWidth: 1200,
-          logging: false,
-          letterRendering: true,
-          backgroundColor: '#ffffff',
-          scrollY: 0,
-          scrollX: 0
-        },
-        jsPDF: { 
-          unit: 'mm' as const, 
-          format: 'a4' as const, 
-          orientation: 'portrait' as const,
-          autoPaging: 'text' as const
-        }
-      };
-
-      await html2pdf().from(iframeBody).set(opt).save();
+      
+      // Better Idea: Use Browser Native Print for High Fidelity
+      // This preserves fonts (Myanmar script), text selection, and vectors.
+      iframeWindow.focus();
+      iframeWindow.print();
+      
+      setToast('Print Dialog Opened');
+      setTimeout(() => setToast(null), 3000);
     } catch (err) {
-      console.error('PDF Export failed:', err);
-      alert('PDF Export failed. Ensuring the preview is fully loaded might help.');
+      console.error('Print failed:', err);
+      alert('Printing failed. Please ensure the preview is fully loaded.');
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleOpenReadable = () => {
+    const blob = new Blob([code], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    // Opening in a new tab allows the user to see the "Readable file link"
+    // and use the browser's native features (Share, Translate, Save).
+    window.open(url, '_blank');
+    setToast('Opened in Reader View');
+    setTimeout(() => setToast(null), 3000);
   };
 
   const handlePaste = async () => {
@@ -309,13 +307,26 @@ export default function App() {
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={handleOpenReadable}
+              className="w-12 h-12 md:w-auto md:h-auto flex items-center justify-center md:gap-2 md:px-3 md:py-1.5 bg-transparent border border-brand-border rounded-lg md:rounded text-brand-text font-semibold hover:bg-brand-border/30 transition-colors"
+              aria-label="Open Reader View"
+              title="Open in Full Read Mode"
+            >
+              <ExternalLink size={20} />
+              <span className="hidden md:inline uppercase text-xs">Reader Link</span>
+            </motion.button>
+            
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={handleExportPDF}
               disabled={isExporting}
               className="w-12 h-12 md:w-auto md:h-auto flex items-center justify-center md:gap-2 md:px-3 md:py-1.5 bg-transparent border border-brand-border rounded-lg md:rounded text-brand-text font-semibold transition-colors hover:bg-brand-border/30 disabled:opacity-50"
-              aria-label="Export PDF"
+              aria-label="Print Document"
+              title="Print to PDF (High Quality)"
             >
-              {isExporting ? <Loader2 size={20} className="animate-spin" /> : <FileText size={20} />}
-              <span className="hidden md:inline uppercase text-xs">{isExporting ? '...' : 'PDF'}</span>
+              {isExporting ? <Loader2 size={20} className="animate-spin" /> : <Printer size={20} />}
+              <span className="hidden md:inline uppercase text-xs">{isExporting ? '...' : 'Print'}</span>
             </motion.button>
 
             <motion.button
