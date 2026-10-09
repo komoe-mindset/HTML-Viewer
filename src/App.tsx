@@ -16,7 +16,8 @@ import {
   Loader2,
   ClipboardPaste,
   ExternalLink,
-  Printer
+  Printer,
+  Box
 } from 'lucide-react';
 
 const DEFAULT_CODE = `<!DOCTYPE html>
@@ -327,6 +328,21 @@ export default function App() {
               <ExternalLink size={20} />
               <span className="hidden md:inline uppercase text-xs">Reader Link</span>
             </motion.button>
+
+            {/* 3D Viewer External Link */}
+            <motion.a
+              href="https://3d-viewer.komoe.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-12 h-12 md:w-auto md:h-auto flex items-center justify-center md:gap-2 md:px-3 md:py-1.5 bg-transparent border border-brand-border rounded-lg md:rounded text-brand-text font-semibold hover:bg-brand-border/30 hover:text-white transition-colors"
+              aria-label="Open 3D Viewer"
+              title="Open 3D Viewer (https://3d-viewer.komoe.org/)"
+            >
+              <Box size={20} className="text-cyan-400" />
+              <span className="hidden md:inline uppercase text-xs">3D Viewer</span>
+            </motion.a>
             
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -494,6 +510,17 @@ export default function App() {
           </span>
         </div>
         <div className="flex items-center gap-4 text-[10px] font-semibold uppercase tracking-wider">
+          <a
+            href="https://3d-viewer.komoe.org/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline flex items-center gap-1 opacity-90 hover:opacity-100 transition-opacity"
+            title="Open 3D Viewer"
+          >
+            <Box size={12} />
+            <span>3D Viewer</span>
+          </a>
+          <span className="opacity-40">•</span>
           <span>UTF-8</span>
           <span>HTML5 / CSS3</span>
         </div>
