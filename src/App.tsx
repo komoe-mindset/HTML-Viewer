@@ -1,5 +1,6 @@
-import { useState, useRef, ChangeEvent, useEffect, useMemo } from 'react';
+import { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import html2pdf from 'html2pdf.js';
 import { 
   Code2, 
   Eye, 
@@ -10,37 +11,100 @@ import {
   Check, 
   Layout, 
   Smartphone, 
-  Tablet,
-  Monitor, 
+  Monitor,
+  FileText,
   Loader2,
+  ClipboardPaste,
   ExternalLink,
   Printer,
-  Box,
-  RotateCcw,
-  Sparkles,
-  FileCode2
+  Box
 } from 'lucide-react';
-import { generatePreviewDocument, detectCodeLanguage } from './utils/transpiler';
-import { DEFAULT_REACT_CODE, DEFAULT_HTML_CODE } from './utils/templates';
 
-type ViewportMode = 'mobile' | 'tablet' | 'desktop';
-type FileType = 'App.tsx' | 'index.html';
+const DEFAULT_CODE = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello From HTML Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: system-ui, -apple-system, sans-serif;
+            color: #1e293b;
+            margin: 0;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+        }
+        .badge {
+            display: inline-block;
+            background: #4f46e5;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        h1 { font-size: 2rem; font-weight: 800; margin-bottom: 1rem; color: #1e1b4b; }
+        p { color: #64748b; line-height: 1.6; margin-bottom: 2rem; font-size: 0.95rem; }
+        button {
+            background: #4f46e5;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.4);
+            background: #4338ca;
+        }
+        @media (min-width: 640px) {
+            h1 { font-size: 2.5rem; }
+            .card { padding: 3rem; }
+            button { width: auto; }
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="badge">Live Studio</span>
+        <h1>Mingalar Par! ✨</h1>
+        <p>This is your professional Real-time HTML Playground. Switch between Editor and Preview via the bottom navigation on mobile.</p>
+        <button onclick="alert('JavaScript is fully supported!')">Interactive Action</button>
+    </div>
+</body>
+</html>`;
 
 export default function App() {
-  const [currentFile, setCurrentFile] = useState<FileType>('App.tsx');
-  const [code, setCode] = useState<string>(DEFAULT_REACT_CODE);
+  const [code, setCode] = useState(DEFAULT_CODE);
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [viewport, setViewport] = useState<ViewportMode>('desktop');
-  const [isExporting, setIsExporting] = useState(false);
-
   const [isMobile, setIsMobile] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth < 768;
     }
     return false;
   });
-
   // Default view mode to 'split' on desktop & tablet (>=768px), and 'editor' on mobile (<768px)
   const [viewMode, setViewMode] = useState<'split' | 'editor' | 'preview'>(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -48,7 +112,8 @@ export default function App() {
     }
     return 'split';
   });
-
+  const [previewScale, setPreviewScale] = useState<'mobile' | 'desktop'>('desktop');
+  const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -68,16 +133,10 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, [viewMode]);
 
-  // Transpile and generate isolated preview document
-  const { html: previewHtml, isReact, error: transpileError } = useMemo(() => {
-    const detected = detectCodeLanguage(code);
-    const mode = currentFile.endsWith('.tsx') ? 'tsx' : detected === 'tsx' ? 'tsx' : 'html';
-    return generatePreviewDocument(code, mode);
-  }, [code, currentFile]);
-
-  // Keyboard Shortcuts (Ctrl+S / Cmd+S)
+  // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+S or Cmd+S
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         handleDownload();
@@ -88,56 +147,16 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [code, currentFile]);
-
-  const handleSwitchTemplate = (targetFile: FileType) => {
-    if (targetFile === currentFile) return;
-
-    if (code.trim().length > 0 && code !== DEFAULT_REACT_CODE && code !== DEFAULT_HTML_CODE) {
-      const confirmed = window.confirm(`Switch to ${targetFile}? Any unsaved changes in ${currentFile} will be replaced with the default ${targetFile} template.`);
-      if (!confirmed) return;
-    }
-
-    setCurrentFile(targetFile);
-    if (targetFile === 'App.tsx') {
-      setCode(DEFAULT_REACT_CODE);
-      setToast('Switched to React (TSX) Sandbox');
-    } else {
-      setCode(DEFAULT_HTML_CODE);
-      setToast('Switched to HTML5 Template');
-    }
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  const handleResetTemplate = () => {
-    if (window.confirm(`Reset ${currentFile} to default starter template?`)) {
-      if (currentFile === 'App.tsx') {
-        setCode(DEFAULT_REACT_CODE);
-      } else {
-        setCode(DEFAULT_HTML_CODE);
-      }
-      setToast('Template Reset');
-      setTimeout(() => setToast(null), 2500);
-    }
-  };
+  }, [code]); // Re-bind if code (or handleDownload dependencies) changes
 
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const fileName = file.name;
-    const isTsx = fileName.endsWith('.tsx') || fileName.endsWith('.jsx') || fileName.endsWith('.ts') || fileName.endsWith('.js');
-    const targetFile: FileType = isTsx ? 'App.tsx' : 'index.html';
-
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
-      if (content) {
-        setCurrentFile(targetFile);
-        setCode(content);
-        setToast(`Loaded ${fileName}`);
-        setTimeout(() => setToast(null), 3000);
-      }
+      if (content) setCode(content);
     };
     reader.readAsText(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -154,15 +173,11 @@ export default function App() {
   };
 
   const handleDownload = () => {
-    const isTsxFile = currentFile.endsWith('.tsx') || isReact;
-    const downloadName = isTsxFile ? 'App.tsx' : 'index.html';
-    const mimeType = isTsxFile ? 'text/typescript' : 'text/html';
-
-    const blob = new Blob([code], { type: mimeType });
+    const blob = new Blob([code], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = downloadName;
+    a.download = 'index.html';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -179,8 +194,11 @@ export default function App() {
       const iframeWindow = iframeRef.current.contentWindow;
       if (!iframeWindow) throw new Error("Iframe not accessible");
 
+      // Give a tiny bit of time for the toast to show
       await new Promise(resolve => setTimeout(resolve, 500));
       
+      // Better Idea: Use Browser Native Print for High Fidelity
+      // This preserves fonts (Myanmar script), text selection, and vectors.
       iframeWindow.focus();
       iframeWindow.print();
       
@@ -195,10 +213,12 @@ export default function App() {
   };
 
   const handleOpenReadable = () => {
-    const blob = new Blob([previewHtml], { type: 'text/html' });
+    const blob = new Blob([code], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
+    // Opening in a new tab allows the user to see the "Readable file link"
+    // and use the browser's native features (Share, Translate, Save).
     window.open(url, '_blank');
-    setToast('Opened in Full Reader View');
+    setToast('Opened in Reader View');
     setTimeout(() => setToast(null), 3000);
   };
 
@@ -210,14 +230,8 @@ export default function App() {
 
       const text = await navigator.clipboard.readText();
       if (typeof text === 'string' && text.length > 0) {
-        const detected = detectCodeLanguage(text);
-        if (detected === 'tsx' && currentFile !== 'App.tsx') {
-          setCurrentFile('App.tsx');
-        } else if (detected === 'html' && currentFile !== 'index.html') {
-          setCurrentFile('index.html');
-        }
         setCode(text);
-        setToast(`${detected === 'tsx' ? 'React TSX' : 'HTML'} Pasted Successfully`);
+        setToast('HTML Pasted Successfully');
         setTimeout(() => setToast(null), 3000);
       } else {
         setToast('Clipboard is empty');
@@ -247,25 +261,21 @@ export default function App() {
             &lt;/&gt;
           </div>
           <div className="flex flex-col">
-            <h1 className="text-[10px] md:text-xs font-bold text-white uppercase tracking-widest leading-none">
-              CODEFLOW STUDIO
-            </h1>
-            <span className="text-[8px] md:text-[9px] text-white/70 font-medium uppercase tracking-tighter opacity-80">
-              HTML5 & React TSX Previewer
-            </span>
+            <h1 className="text-[10px] md:text-xs font-bold text-white uppercase tracking-widest leading-none">CODEFLOW STUDIO</h1>
+            <span className="text-[8px] md:text-[9px] text-white/70 font-medium uppercase tracking-tighter opacity-80">Mobile Professional</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 md:gap-3">
-          {/* Layout Controls - Desktop & Tablet */}
+        <div className="flex items-center gap-1 md:gap-4">
+          {/* Layout Controls - Desktop Only */}
           <div className="hidden md:flex bg-brand-bg/50 p-1 rounded-md gap-1 border border-brand-border">
             <button
               onClick={() => setViewMode('split')}
               className={`p-1.5 rounded transition-all ${viewMode === 'split' ? 'bg-brand-accent text-white shadow-sm' : 'text-brand-text-dim hover:text-brand-text'}`}
-              title="Split View (Editor & Live Preview)"
+              title="Split View"
               aria-label="Toggle split view"
             >
-              <Layout size={18} />
+              <Layout size={20} />
             </button>
             <button
               onClick={() => setViewMode('editor')}
@@ -273,7 +283,7 @@ export default function App() {
               title="Editor Only"
               aria-label="Toggle editor view"
             >
-              <Code2 size={18} />
+              <Code2 size={20} />
             </button>
             <button
               onClick={() => setViewMode('preview')}
@@ -281,7 +291,7 @@ export default function App() {
               title="Preview Only"
               aria-label="Toggle preview view"
             >
-              <Eye size={18} />
+              <Eye size={20} />
             </button>
           </div>
 
@@ -294,7 +304,7 @@ export default function App() {
               ref={fileInputRef}
               onChange={handleFileUpload}
               className="hidden"
-              accept=".html,.htm,.tsx,.jsx,.ts,.js,.txt"
+              accept=".html,.htm,.txt"
             />
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -302,9 +312,8 @@ export default function App() {
               onClick={() => fileInputRef.current?.click()}
               className="w-12 h-12 md:w-auto md:h-auto flex items-center justify-center md:gap-2 md:px-3 md:py-1.5 bg-transparent border border-brand-border rounded-lg md:rounded text-brand-text font-semibold hover:bg-brand-border/30 transition-colors"
               aria-label="Open File"
-              title="Upload HTML or .tsx File"
             >
-              <Upload size={18} />
+              <Upload size={20} />
               <span className="hidden md:inline uppercase text-xs">Open File</span>
             </motion.button>
             
@@ -314,10 +323,10 @@ export default function App() {
               onClick={handleOpenReadable}
               className="w-12 h-12 md:w-auto md:h-auto flex items-center justify-center md:gap-2 md:px-3 md:py-1.5 bg-transparent border border-brand-border rounded-lg md:rounded text-brand-text font-semibold hover:bg-brand-border/30 transition-colors"
               aria-label="Open Reader View"
-              title="Open Rendered Preview in New Tab"
+              title="Open in Full Read Mode"
             >
-              <ExternalLink size={18} />
-              <span className="hidden md:inline uppercase text-xs">Reader View</span>
+              <ExternalLink size={20} />
+              <span className="hidden md:inline uppercase text-xs">Reader Link</span>
             </motion.button>
 
             {/* 3D Viewer External Link */}
@@ -331,7 +340,7 @@ export default function App() {
               aria-label="Open 3D Viewer"
               title="Open 3D Viewer (https://3d-viewer.komoe.org/)"
             >
-              <Box size={18} className="text-cyan-400" />
+              <Box size={20} className="text-cyan-400" />
               <span className="hidden md:inline uppercase text-xs">3D Viewer</span>
             </motion.a>
             
@@ -342,9 +351,9 @@ export default function App() {
               disabled={isExporting}
               className="w-12 h-12 md:w-auto md:h-auto flex items-center justify-center md:gap-2 md:px-3 md:py-1.5 bg-transparent border border-brand-border rounded-lg md:rounded text-brand-text font-semibold transition-colors hover:bg-brand-border/30 disabled:opacity-50"
               aria-label="Print Document"
-              title="Print Preview to PDF"
+              title="Print to PDF (High Quality)"
             >
-              {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Printer size={18} />}
+              {isExporting ? <Loader2 size={20} className="animate-spin" /> : <Printer size={20} />}
               <span className="hidden md:inline uppercase text-xs">{isExporting ? '...' : 'Print'}</span>
             </motion.button>
 
@@ -353,11 +362,10 @@ export default function App() {
               whileTap={{ scale: 0.98 }}
               onClick={handleDownload}
               className="w-12 h-12 md:w-auto md:h-auto flex items-center justify-center md:gap-2 md:px-4 md:py-1.5 bg-brand-accent rounded-lg md:rounded text-white font-bold hover:bg-brand-accent/90 transition-colors shadow-lg shadow-brand-accent/20"
-              aria-label="Save Code"
-              title={`Download ${currentFile}`}
+              aria-label="Deploy Live"
             >
-              <Download size={18} />
-              <span className="hidden md:inline uppercase text-xs">Save</span>
+              <Download size={20} />
+              <span className="hidden md:inline uppercase text-xs">Deploy</span>
             </motion.button>
           </div>
         </div>
@@ -372,71 +380,19 @@ export default function App() {
               viewMode === 'split' && !isMobile ? 'w-full md:w-1/2 md:basis-1/2 flex-1' : 'w-full flex-1'
             }`}
           >
-            {/* Editor Sub-Header Toolbar */}
-            <div className="h-11 md:h-10 px-3 md:px-4 bg-brand-sidebar border-b border-brand-border flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                {/* File / Language Switcher */}
-                <div className="flex items-center bg-brand-bg/70 p-0.5 rounded border border-brand-border">
-                  <button
-                    onClick={() => handleSwitchTemplate('App.tsx')}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
-                      currentFile === 'App.tsx'
-                        ? 'bg-brand-accent text-white font-bold shadow-sm'
-                        : 'text-brand-text-dim hover:text-brand-text'
-                    }`}
-                    title="React 18 + TypeScript TSX Component"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                    <span>App.tsx</span>
-                  </button>
-                  <button
-                    onClick={() => handleSwitchTemplate('index.html')}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-all ${
-                      currentFile === 'index.html'
-                        ? 'bg-brand-accent text-white font-bold shadow-sm'
-                        : 'text-brand-text-dim hover:text-brand-text'
-                    }`}
-                    title="Standard HTML5 Document"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-                    <span>index.html</span>
-                  </button>
-                </div>
-
-                {/* Status Indicator */}
-                {transpileError ? (
-                  <span className="text-[10px] font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded hidden sm:inline-flex items-center gap-1">
-                    ⚠️ Syntax Error
-                  </span>
-                ) : isReact ? (
-                  <span className="text-[10px] font-medium text-cyan-400/90 hidden lg:inline-flex items-center gap-1">
-                    ⚡ Babel Live TSX
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-medium text-emerald-400/90 hidden lg:inline-flex items-center gap-1">
-                    ● HTML5 Live
-                  </span>
-                )}
-              </div>
-
-              {/* Editor Quick Actions */}
+            <div className="h-10 md:h-9 px-4 bg-brand-sidebar border-b border-brand-border flex items-center justify-between shrink-0">
+              <span className="text-[10px] md:text-[11px] font-bold text-brand-text-dim uppercase tracking-widest flex items-center gap-2">
+                index.html
+              </span>
               <div className="flex items-center gap-1.5 md:gap-2">
                 <button 
                   onClick={handlePaste}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-accent hover:bg-brand-accent/90 text-white rounded-md text-xs font-semibold shadow-sm hover:shadow transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-1 focus-visible:ring-offset-brand-sidebar active:scale-95 cursor-pointer"
                   title="Paste from Clipboard"
-                  aria-label="Paste code from clipboard"
+                  aria-label="Paste HTML code from clipboard"
                 >
                   <span aria-hidden="true" className="text-xs">📋</span>
-                  <span>Paste Code</span>
-                </button>
-                <button 
-                  onClick={handleResetTemplate}
-                  className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-1 focus-visible:ring-offset-brand-sidebar cursor-pointer"
-                  title="Reset to Template"
-                  aria-label="Reset code to default template"
-                >
-                  <RotateCcw size={16} />
+                  <span>Paste HTML</span>
                 </button>
                 <button 
                   onClick={handleCopy}
@@ -444,7 +400,7 @@ export default function App() {
                   title="Copy to Clipboard"
                   aria-label="Copy code to clipboard"
                 >
-                  {copied ? <Check size={16} className="text-brand-accent" /> : <Copy size={16} />}
+                  {copied ? <Check size={18} className="text-brand-accent" /> : <Copy size={18} />}
                 </button>
                 <button 
                   onClick={handleClear}
@@ -452,7 +408,7 @@ export default function App() {
                   title="Clear Editor"
                   aria-label="Clear code editor"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={18} />
                 </button>
               </div>
             </div>
@@ -464,7 +420,7 @@ export default function App() {
                 onChange={(e) => setCode(e.target.value)}
                 spellCheck={false}
                 className="absolute inset-0 w-full h-full p-6 font-mono text-sm leading-relaxed resize-none bg-brand-editor text-brand-text focus:outline-none focus:ring-0 selection:bg-brand-accent/40"
-                placeholder={currentFile === 'App.tsx' ? '// Paste your React/TypeScript component here...' : '<!-- Paste your HTML here... -->'}
+                placeholder="<!-- Paste your HTML here... -->"
               />
             </div>
           </div>
@@ -477,92 +433,44 @@ export default function App() {
               viewMode === 'split' && !isMobile ? 'w-full md:w-1/2 md:basis-1/2 flex-1' : 'w-full flex-1'
             }`}
           >
-            {/* Preview Toolbar with Viewport Toggle Controls */}
-            <div className="h-11 md:h-10 px-3 md:px-4 bg-brand-sidebar border-b border-brand-border flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] md:text-[11px] font-bold text-brand-text-dim uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Live Preview
-                </span>
-                <span className="text-[10px] font-mono text-brand-text-dim/80 hidden sm:inline-block">
-                  ({viewport === 'mobile' ? '375 × 667' : viewport === 'tablet' ? '768 × 920' : '100% Fluid'})
-                </span>
-              </div>
+            <div className="h-10 md:h-9 px-4 bg-brand-sidebar border-b border-brand-border flex items-center justify-between shrink-0">
+               <span className="text-[10px] md:text-[11px] font-bold text-brand-text-dim uppercase tracking-widest flex items-center gap-2">
+                Live Preview
+              </span>
               
-              {/* Viewport Toggle Controls (Mobile, Tablet, Desktop) */}
-              <div className="flex items-center gap-2">
-                <div className="flex bg-brand-bg/80 p-0.5 rounded border border-brand-border items-center">
+              <div className="hidden md:flex items-center gap-4">
+                <div className="flex bg-brand-bg p-0.5 rounded border border-brand-border">
                   <button 
-                    onClick={() => setViewport('mobile')}
-                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
-                      viewport === 'mobile' 
-                        ? 'bg-brand-accent text-white font-bold shadow-sm' 
-                        : 'text-brand-text-dim hover:text-brand-text'
-                    }`}
-                    title="Mobile Viewport (375px)"
-                    aria-label="Switch to Mobile Viewport (375px)"
-                  >
-                    <Smartphone size={14} />
-                    <span className="hidden sm:inline text-[11px]">Mobile</span>
-                  </button>
-                  <button 
-                    onClick={() => setViewport('tablet')}
-                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
-                      viewport === 'tablet' 
-                        ? 'bg-brand-accent text-white font-bold shadow-sm' 
-                        : 'text-brand-text-dim hover:text-brand-text'
-                    }`}
-                    title="Tablet Viewport (768px)"
-                    aria-label="Switch to Tablet Viewport (768px)"
-                  >
-                    <Tablet size={14} />
-                    <span className="hidden sm:inline text-[11px]">Tablet</span>
-                  </button>
-                  <button 
-                    onClick={() => setViewport('desktop')}
-                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
-                      viewport === 'desktop' 
-                        ? 'bg-brand-accent text-white font-bold shadow-sm' 
-                        : 'text-brand-text-dim hover:text-brand-text'
-                    }`}
-                    title="Desktop Viewport (100% Fluid)"
-                    aria-label="Switch to Desktop Viewport (100% Fluid)"
+                    onClick={() => setPreviewScale('desktop')}
+                    className={`p-1 rounded transition-all ${previewScale === 'desktop' ? 'bg-brand-accent text-white shadow' : 'text-brand-text-dim hover:text-brand-text'}`}
+                    aria-label="Switch to desktop preview scale"
                   >
                     <Monitor size={14} />
-                    <span className="hidden sm:inline text-[11px]">Desktop</span>
+                  </button>
+                  <button 
+                    onClick={() => setPreviewScale('mobile')}
+                    className={`p-1 rounded transition-all ${previewScale === 'mobile' ? 'bg-brand-accent text-white shadow' : 'text-brand-text-dim hover:text-brand-text'}`}
+                    aria-label="Switch to mobile preview scale"
+                  >
+                    <Smartphone size={14} />
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Isolated Preview Sandbox Container */}
-            <div className={`flex-1 flex items-center justify-center overflow-auto bg-brand-bg ${viewMode === 'preview' ? 'p-0 md:p-6' : 'p-2 md:p-4'}`}>
+            <div className={`flex-1 flex items-center justify-center overflow-auto bg-brand-bg ${viewMode === 'preview' ? 'p-0 md:p-8' : 'p-2 md:p-4'}`}>
               <div 
-                className={`bg-white shadow-2xl transition-all duration-300 flex flex-col ${
-                  viewport === 'mobile' && !isMobile
-                    ? 'w-[375px] h-[667px] max-h-[calc(100%-20px)] rounded-2xl border-4 border-slate-700 overflow-hidden my-auto'
-                    : viewport === 'tablet' && !isMobile
-                      ? 'w-[768px] h-[920px] max-h-[calc(100%-20px)] rounded-2xl border-4 border-slate-700 overflow-hidden my-auto'
-                      : 'w-full h-full rounded-sm overflow-hidden'
+                className={`bg-white shadow-2xl rounded-sm overflow-hidden transition-all duration-300 ${
+                  (previewScale === 'mobile' && !isMobile) 
+                    ? 'w-[375px] h-[667px] max-h-[calc(100%-20px)] my-2' 
+                    : 'w-full h-full'
                 }`}
               >
-                {/* Device Frame Header Bar for Mobile/Tablet */}
-                {(viewport === 'mobile' || viewport === 'tablet') && !isMobile && (
-                  <div className="h-6 bg-slate-800 text-slate-400 px-3 flex items-center justify-between text-[10px] font-mono shrink-0 select-none border-b border-slate-700">
-                    <span className="flex items-center gap-1.5 text-slate-300">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      {viewport === 'mobile' ? 'Mobile (375 × 667)' : 'Tablet (768 × 920)'}
-                    </span>
-                    <span className="text-slate-400">Sandbox Preview</span>
-                  </div>
-                )}
-                
-                {/* Isolated Preview Iframe */}
                 <iframe
                   ref={iframeRef}
-                  title="Isolated Responsive Preview Sandbox"
-                  srcDoc={previewHtml}
-                  className="w-full flex-1 border-none bg-white"
+                  title="Preview"
+                  srcDoc={code}
+                  className="w-full h-full border-none"
                   sandbox="allow-scripts allow-modals allow-same-origin"
                 />
               </div>
@@ -595,13 +503,10 @@ export default function App() {
       <footer className="hidden md:flex h-7 bg-brand-accent text-white px-4 items-center justify-between shrink-0">
         <div className="flex items-center gap-4 text-[10px] font-semibold uppercase tracking-wider">
           <span className="flex items-center gap-1.5 px-2 py-0.5 bg-black/10 rounded">
-            {currentFile}
+            Line 1, Col 1
           </span>
-          <span className="opacity-90">
-            ● {isReact ? 'React 18 + TSX Live' : 'HTML5 Live Sync'}
-          </span>
-          <span className="opacity-75">
-            Viewport: {viewport.toUpperCase()}
+          <span className="opacity-80">
+            ● Live Sync Active
           </span>
         </div>
         <div className="flex items-center gap-4 text-[10px] font-semibold uppercase tracking-wider">
@@ -616,9 +521,8 @@ export default function App() {
             <span>3D Viewer</span>
           </a>
           <span className="opacity-40">•</span>
-          <span>Babel Standalone</span>
-          <span className="opacity-40">•</span>
-          <span>Tailwind CSS</span>
+          <span>UTF-8</span>
+          <span>HTML5 / CSS3</span>
         </div>
       </footer>
 
