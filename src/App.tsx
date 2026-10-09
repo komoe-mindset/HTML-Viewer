@@ -98,8 +98,19 @@ export default function App() {
   const [code, setCode] = useState(DEFAULT_CODE);
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'split' | 'editor' | 'preview'>('editor');
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+  // Default view mode to 'split' on desktop & tablet (>=768px), and 'editor' on mobile (<768px)
+  const [viewMode, setViewMode] = useState<'split' | 'editor' | 'preview'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return 'editor';
+    }
+    return 'split';
+  });
   const [previewScale, setPreviewScale] = useState<'mobile' | 'desktop'>('desktop');
   const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -117,7 +128,6 @@ export default function App() {
       }
     };
     
-    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [viewMode]);
@@ -213,23 +223,25 @@ export default function App() {
 
   const handlePaste = async () => {
     try {
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        throw new Error('Clipboard API not supported in this environment');
+      }
+
       const text = await navigator.clipboard.readText();
-      if (text) {
-        if (code.trim() && !window.confirm('This will replace your current code. Continue?')) {
-          return;
-        }
+      if (typeof text === 'string' && text.length > 0) {
         setCode(text);
+        setToast('HTML Pasted Successfully');
+        setTimeout(() => setToast(null), 3000);
+      } else {
+        setToast('Clipboard is empty');
+        setTimeout(() => setToast(null), 3000);
+        textareaRef.current?.focus();
       }
     } catch (err) {
-      if (code.trim()) {
-        if (window.confirm('Direct paste is blocked by browser security. Would you like to clear the editor so you can paste manually (Ctrl+V)?')) {
-          setCode('');
-          setTimeout(() => textareaRef.current?.focus(), 100);
-        }
-      } else {
-        textareaRef.current?.focus();
-        alert('Direct paste blocked. Please use Ctrl+V (Cmd+V).');
-      }
+      console.warn('Clipboard read error or permission denied:', err);
+      textareaRef.current?.focus();
+      setToast('Clipboard blocked: Press Ctrl+V (or Cmd+V) to paste');
+      setTimeout(() => setToast(null), 4000);
     }
   };
 
@@ -344,42 +356,43 @@ export default function App() {
       </header>
 
       {/* Main Workspace */}
-      <main className="flex-1 flex flex-col md:flex-row min-h-0 relative pb-16 md:pb-0">
+      <main className="flex-1 flex flex-col md:flex-row min-h-0 relative pb-16 md:pb-0 overflow-hidden">
         {/* Editor Pane */}
         {(viewMode === 'editor' || (viewMode === 'split' && !isMobile)) && (
-          <motion.div 
-            initial={false}
-            animate={{ width: (viewMode === 'split' && !isMobile) ? '50%' : '100%' }}
-            className={`flex flex-col bg-brand-editor border-r border-brand-border relative h-full shrink-0`}
+          <div 
+            className={`flex flex-col bg-brand-editor border-r border-brand-border relative h-full min-w-0 transition-all duration-200 ${
+              viewMode === 'split' && !isMobile ? 'w-full md:w-1/2 md:basis-1/2 flex-1' : 'w-full flex-1'
+            }`}
           >
             <div className="h-10 md:h-9 px-4 bg-brand-sidebar border-b border-brand-border flex items-center justify-between shrink-0">
               <span className="text-[10px] md:text-[11px] font-bold text-brand-text-dim uppercase tracking-widest flex items-center gap-2">
                 index.html
               </span>
-              <div className="flex items-center gap-1 md:gap-2">
+              <div className="flex items-center gap-1.5 md:gap-2">
                 <button 
                   onClick={handlePaste}
-                  className="w-12 h-12 md:w-7 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
-                  title="Paste & Replace All"
-                  aria-label="Paste and replace current code"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-accent hover:bg-brand-accent/90 text-white rounded-md text-xs font-semibold shadow-sm hover:shadow transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-1 focus-visible:ring-offset-brand-sidebar active:scale-95 cursor-pointer"
+                  title="Paste from Clipboard"
+                  aria-label="Paste HTML code from clipboard"
                 >
-                  <ClipboardPaste size={20} className="md:w-[18px] md:h-[18px]" />
+                  <span aria-hidden="true" className="text-xs">📋</span>
+                  <span>Paste HTML</span>
                 </button>
                 <button 
                   onClick={handleCopy}
-                  className="w-12 h-12 md:w-7 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text"
+                  className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center hover:bg-brand-border/50 rounded transition-colors text-brand-text-dim hover:text-brand-text focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-1 focus-visible:ring-offset-brand-sidebar cursor-pointer"
                   title="Copy to Clipboard"
                   aria-label="Copy code to clipboard"
                 >
-                  {copied ? <Check size={20} className="text-brand-accent md:w-[18px] md:h-[18px]" /> : <Copy size={20} className="md:w-[18px] md:h-[18px]" />}
+                  {copied ? <Check size={18} className="text-brand-accent" /> : <Copy size={18} />}
                 </button>
                 <button 
                   onClick={handleClear}
-                  className="w-12 h-12 md:w-7 md:h-7 flex items-center justify-center hover:bg-red-500/10 rounded transition-colors text-brand-text-dim hover:text-red-400"
+                  className="w-8 h-8 md:w-7 md:h-7 flex items-center justify-center hover:bg-red-500/10 rounded transition-colors text-brand-text-dim hover:text-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 focus-visible:ring-offset-brand-sidebar cursor-pointer"
                   title="Clear Editor"
                   aria-label="Clear code editor"
                 >
-                  <Trash2 size={20} className="md:w-[18px] md:h-[18px]" />
+                  <Trash2 size={18} />
                 </button>
               </div>
             </div>
@@ -394,15 +407,15 @@ export default function App() {
                 placeholder="<!-- Paste your HTML here... -->"
               />
             </div>
-          </motion.div>
+          </div>
         )}
 
         {/* Preview Pane */}
         {(viewMode === 'preview' || (viewMode === 'split' && !isMobile)) && (
-          <motion.div 
-            initial={false}
-            animate={{ width: (viewMode === 'split' && !isMobile) ? '50%' : '100%' }}
-            className={`flex flex-col bg-brand-bg relative h-full shrink-0`}
+          <div 
+            className={`flex flex-col bg-brand-bg relative h-full min-w-0 transition-all duration-200 ${
+              viewMode === 'split' && !isMobile ? 'w-full md:w-1/2 md:basis-1/2 flex-1' : 'w-full flex-1'
+            }`}
           >
             <div className="h-10 md:h-9 px-4 bg-brand-sidebar border-b border-brand-border flex items-center justify-between shrink-0">
                <span className="text-[10px] md:text-[11px] font-bold text-brand-text-dim uppercase tracking-widest flex items-center gap-2">
@@ -429,15 +442,13 @@ export default function App() {
               </div>
             </div>
 
-            <div className={`flex-1 flex items-center justify-center overflow-auto bg-brand-bg ${viewMode === 'preview' ? 'p-0 md:p-8' : 'p-4 md:p-8'}`}>
-              <motion.div 
-                layout
-                initial={false}
-                animate={{ 
-                  width: (previewScale === 'mobile' && !isMobile) ? '375px' : '100%',
-                  height: (previewScale === 'mobile' && !isMobile) ? '667px' : '100%',
-                }}
-                className={`bg-white shadow-2xl rounded-sm overflow-hidden transition-all duration-300 ${(previewScale === 'mobile' && !isMobile) ? 'max-h-[calc(100%-40px)] my-5' : 'w-full h-full'}`}
+            <div className={`flex-1 flex items-center justify-center overflow-auto bg-brand-bg ${viewMode === 'preview' ? 'p-0 md:p-8' : 'p-2 md:p-4'}`}>
+              <div 
+                className={`bg-white shadow-2xl rounded-sm overflow-hidden transition-all duration-300 ${
+                  (previewScale === 'mobile' && !isMobile) 
+                    ? 'w-[375px] h-[667px] max-h-[calc(100%-20px)] my-2' 
+                    : 'w-full h-full'
+                }`}
               >
                 <iframe
                   ref={iframeRef}
@@ -446,9 +457,9 @@ export default function App() {
                   className="w-full h-full border-none"
                   sandbox="allow-scripts allow-modals allow-same-origin"
                 />
-              </motion.div>
+              </div>
             </div>
-          </motion.div>
+          </div>
         )}
       </main>
 
@@ -495,7 +506,7 @@ export default function App() {
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-brand-accent text-white rounded-full shadow-2xl font-bold text-xs uppercase tracking-widest flex items-center gap-2 border border-white/20"
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-brand-accent text-white rounded-full shadow-2xl font-semibold text-xs flex items-center gap-2 border border-white/20 tracking-wide"
           >
             <Check size={14} />
             {toast}
